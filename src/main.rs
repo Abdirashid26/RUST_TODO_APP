@@ -1,15 +1,16 @@
 use std::net::SocketAddr;
 use axum::response::IntoResponse;
 use axum::{Json, Router};
-use axum::extract::State;
+use axum::extract::{Path, State};
 use axum::routing::{get, post};
 use dotenvy::dotenv;
+use uuid::Uuid;
 use crate::app_state::AppState;
 use crate::common::universal::UniversalResponse;
 use crate::db::init_db;
 use crate::models::todo::CreateTodo;
 use crate::repos::todo_repo;
-use crate::repos::todo_repo::create_todo;
+use crate::repos::todo_repo::{create_todo, get_all_todos, get_todo_by_id};
 
 mod app_state;
 mod db;
@@ -30,6 +31,8 @@ async fn main() {
     let app = Router::new()
         .route("/", get(todo_app_ping))
         .route("/api/v1/todo/add",post(add_todo_handler))
+        .route("/api/v1/todo/all",post(get_all_todos_handler))
+        .route("/api/v1/todo/{todo_id}",post(fetch_by_id_handle))
         .with_state(state);
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
@@ -65,4 +68,50 @@ async fn add_todo_handler(
     };
 
     response.into_response()
+}
+
+
+async fn get_all_todos_handler(
+    State(state): State<AppState>
+) -> impl IntoResponse {
+
+    println!("Get all Todos !");
+
+    let my_todos_list = get_all_todos(&state.db).await;
+
+    match my_todos_list {
+        Ok(list) => {
+            println!("Success");
+            UniversalResponse::success("All Todo's",list)
+        }
+        Err(e) => {
+            println!("Error: {e:?}");
+            UniversalResponse::failure(format!("Error: {e:?}"))
+        }
+    }.into_response()
+
+}
+
+
+
+async fn fetch_by_id_handle(
+    State(state): State<AppState>,
+    Path(todo_id): Path<Uuid>
+) -> impl IntoResponse{
+
+    println!("Fetch by id request for id : {todo_id:?}");
+
+    let fetch_by_id = get_todo_by_id(&state.db,todo_id).await;
+
+    match fetch_by_id {
+        Ok(todo) => {
+            println!("Success");
+            UniversalResponse::success("Fetched Todo",todo)
+        }
+        Err(e) => {
+            println!("Error: {e:?}");
+            UniversalResponse::failure(format!("Error: {e:?}"))
+        }
+    }.into_response()
+
 }
